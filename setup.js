@@ -76,7 +76,7 @@ function applyPhase(phase) {
 	frame.setEditable(phase.frameEditable);
 	marker.setMap(phase.markerVisible ? GOOGLE.map : null);
 	text.innerHTML = phase.message;
-	filedisabled = !phase.fileEnabled;
+	file.disabled = !phase.fileEnabled;
 	button.disabled = !phase.nextEnabled;
 	if (phase.buttonText) {
 		button.value = phase.buttonText;
@@ -94,6 +94,7 @@ function applyPhase(phase) {
 	if (phase.init) {
 		phase.init();
 	}
+	currentPhase = phase;
 
 }
 
