@@ -118,21 +118,20 @@ var areaPhase = {
 	frameEditable: true,
 	markerVisible: false,
 	
-	message: "Plase select destination area",
+	message: 'Please select destination area',// and enter resolution <input id="resolution" type="text" value="35,40" onchange="resolutionChange()"/>',
 	fileEnabled: false,
 	nextEnabled: true,
 	buttonText: "Next",
 	next: workPhase,
 	init: function() {
 		google.maps.event.addListener(frame, 'bounds_changed', function() {
-		settings.latMax = frame.getBounds().getNorthEast().lat();
-		settings.lonMin = frame.getBounds().getSouthWest().lng();
-		var latMin = frame.getBounds().getSouthWest().lat();
-		var lonMax = frame.getBounds().getNorthEast().lng();
-		settings.diffLat = (settings.latMax - latMin) / (settings.pointsLat - 1);
-		settings.diffLon = (lonMax - settings.lonMin) / (settings.pointsLon - 1);
-	
-	});
+			settings.latMax = frame.getBounds().getNorthEast().lat();
+			settings.lonMin = frame.getBounds().getSouthWest().lng();
+			var latMin = frame.getBounds().getSouthWest().lat();
+			var lonMax = frame.getBounds().getNorthEast().lng();
+			settings.diffLat = (settings.latMax - latMin) / (settings.pointsLat - 1);
+			settings.diffLon = (lonMax - settings.lonMin) / (settings.pointsLon - 1);
+		});
 	},
 	cleanUp: function() {
 		google.maps.event.clearListeners(frame, 'bounds_changed');
@@ -177,7 +176,30 @@ var loadOrCreatePhase = {
 	}
 };
 
-function createWorkOnSavedPhase(state) {
+
+
+function loadSettings(evt) {
+	var f = evt.target.files[0]; 
+	if (f) {
+		var r = new FileReader();
+		r.onload = function(e) {
+			var contents = e.target.result;
+			var phase = createPhaseFromContent(contents);
+			applyPhase(phase);
+		}
+		r.readAsText(f);
+	} else { 
+		alert("Failed to load file");
+	}
+};
+
+function createPhaseFromContent(contents) {
+	var savedObject = JSON.parse(atob(contents));
+	for (property in savedObject.config) {
+		if (savedObject.config.hasOwnProperty(property)) {
+			settings[property] = savedObject.config[property];
+		}
+	}
 	var phase = {
 		frameVisible: true,
 		frameEditable: false,
@@ -189,51 +211,41 @@ function createWorkOnSavedPhase(state) {
 		init: function() {
 			frame.setBounds(settings.getBounds());
 			var calc = new Calculations(settings, onEnd, onAdd);
-			calc.setState(state);
+			calc.setState(savedObject.state);
 			calc.go();
 			console.log(settings);
 		}
 	};
 	return phase; 
-};
-
-function loadSettings(evt) {
-	var f = evt.target.files[0]; 
-	if (f) {
-		var r = new FileReader();
-		r.onload = function(e) {
-			var contents = e.target.result;
-			var savedObject = JSON.parse(atob(contents));
-			
-			for (property in savedObject.config) {
-				if (savedObject.config.hasOwnProperty(property)) {
-					settings[property] = savedObject.config[property];
-				}
-			}
-			applyPhase(createWorkOnSavedPhase(savedObject.state));
-		}
-		r.readAsText(f);
-	} else { 
-		alert("Failed to load file");
-	}
-};
+}
 
 
 var onAdd = function() {
 	var text = document.getElementById("text");
 	
 	return function(done, saveableState) {
-		var state = {
-			config: settings,
-			state: saveableState
-		};
+		
 		text.innerHTML = 'Calculation: ' + done + " / " + settings.pointCount()
-			+ createSaveLink(state);
+			+ createSaveLink(saveableState);
 	}
 }();
 	
-function createSaveLink(state) {
-	return '<br><a id="save" download="settings.json.b64" href="data:text/base64,' + btoa(JSON.stringify(state)) + '">Save state</a>';
+function createSaveLink(saveableState) {
+	var state = {
+		config: settings,
+		state: saveableState
+	};
+	var encodedState = btoa(JSON.stringify(state));
+	return '<br><a download="transit.data" href="data:application/octet-stream,' + encodedState + '">Save state to file</a>'
+		+ '<br><a href="' + getBareUrl() + '#' + encodedState + '">Copiable link</a>';
+}
+
+function getBareUrl() {
+	var url = location.href;
+	if (location.hash) {
+		url = url.substring(0, url.lastIndexOf(location.hash));
+	}
+	return url;
 }
 	
 function onEnd(status) {
@@ -241,68 +253,18 @@ function onEnd(status) {
 	text.innerHTML = status.message + createSaveLink(status.data);
 }
 
-applyPhase(loadOrCreatePhase);
+var firstPhase = loadOrCreatePhase;
+if(location.hash) {
+	firstPhase = createPhaseFromContent(location.hash.substring(1));
+	location.hash = '';
+}
+applyPhase(firstPhase);
 
 	
 };
 
 
 
-/*
-	document.getElementById ("button").addEventListener ("click", originSelected, false);
-	google.maps.event.addListener(GOOGLE.map, 'click', function(evt) {
-		settings.address = [evt.latLng.lat(), evt.latLng.lng()];
-		marker.setPosition(evt.latLng);
-	});
-	
-	document.getElementById('file').addEventListener('change', loadSettings, false);
-
-
-	
-	
-	google.maps.event.addListener(frame, 'bounds_changed', function() {
-		settings.latMax = frame.getBounds().getNorthEast().lat();
-		settings.lonMin = frame.getBounds().getSouthWest().lng();
-		var latMin = frame.getBounds().getSouthWest().lat();
-		var lonMax = frame.getBounds().getNorthEast().lng();
-		settings.diffLat = (settings.latMax - latMin) / (settings.pointsLat - 1);
-		settings.diffLon = (lonMax - settings.lonMin) / (settings.pointsLon - 1);
-	
-	});
-	
-	
-
-	function areaSelected(mouseEvent, state) {
-		frame.setEditable(false);
-		marker.setMap(null);
-		document.getElementById("button").disabled = true;
-		var text = document.getElementById("text");
-		text.innerHTML = 'Please wait while data is collected';
-		var file = document.getElementById("file");
-		file.enabled = false;
-		
-		var calc = new Calculations(settings, onEnd, onAdd);
-		if (state) {
-			calc.setState(state);
-		}
-		calc.go();
-		console.log(settings);
-	}
-	
-	
-	function originSelected() {
-		var button = document.getElementById("button");
-		var text = document.getElementById("text");
-		marker.setMap(null);
-		frame.setMap(GOOGLE.map);
-		google.maps.event.clearListeners(GOOGLE.map, 'click');
-		text.innerHTML = 'Please select destination area';
-		button.value = 'start';
-		button.removeEventListener("click", originSelected, false);
-		button.addEventListener ("click", areaSelected, false);
-	}
-
-*/
 	
 /*	for (var i = 0; i < pointsLat; ++i) {
 		for (var j = 0; j < pointsLon; ++j) {
