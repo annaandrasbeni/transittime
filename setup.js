@@ -1,10 +1,65 @@
 
 var init = function() {
 
+var timeOptions = {
+	values : [
+	{name: "10m/15m/20m/30m/45m/1h/1.5h", value:  [     600,       900,      1200,      1800,      2700,      3600,      5400]},
+	{name: "15m/30m/45m/1h/1.5h/2h/3h", value:    [     900,      1800,      2700,      3600,      5400,      7200,     10800]},
+	{name: "30m/1h/1.5h/2h/3h/4h/6h", value:      [    1800,      3600,      5400,      7200,     10800,     14400,     21600]},
+	{name: "2h/4h/8h/12h/16h/24h/32h", value:     [    7200,     14400,     28800,     43200,     57600,     86400,    115200]}],
+	apply : function(selected, target) {
+		target.times = this.values[selected].value;
+	}
+};
+
+var resolutionOptions = {
+	values : [
+	{name: "25 x 25", value : [25, 25]},
+	{name: "50 x 50", value : [50, 50]},
+	{name: "100 x 100", value : [100, 100]},
+	{name: "50 x 100", value : [50, 100]},
+	{name: "100 x 50", value : [100, 50]}],
+	apply : function(selected, target) {
+		target.setResolution(this.values[selected].value[0], this.values[selected].value[1]);
+	}
+	
+};
+
+var travelOptions = {
+	values : [
+	{name: "TRANSIT"},
+	{name: "WALKING"},
+	{name: "DRIVING"}],
+	apply : function(selected, target) {
+		target.travelMode = this.values[selected].name;
+	}
+
+};
+
+function createCombo(name, options) {
+	var select = document.createElement('select');
+	select.setAttribute("id", "name");
+	select.onchange = function() {  options.apply(select.selectedIndex, settings)  };
+	for (var i =0; i < options.values.length; ++i) {
+		var opt = document.createElement('option');
+		opt.setAttribute('value', options.values[i].name);
+		opt.innerHTML = options.values[i].name;
+		select.appendChild(opt);
+	}
+	return select;
+}
 
 var settings = {
 
-	departure: new Date(2013, 9, 10, 08, 0, 0, 0).valueOf(),
+	departure: function(){var date = new Date();
+				date.setSeconds(0);
+				date.setMinutes(0);
+				date.setHours(8);
+				date.setDate(date.getDate() + 7);
+				while(date.getDay() !== 3) {
+					date.setDate(date.getDate() + 1);
+				}
+				return date.valueOf()}(),
 	address: [47.497691, 19.05476],
 	times:  [     600,       900,      1200,      1800,      2700,      3600,      5400],
 	colors: ["#00FFFF", "#00FF00", "#FFFF00", "#FF8000", "#FF0000", "#800080", "#000060", "#000000"],
@@ -13,13 +68,16 @@ var settings = {
 	
 
 	latMax: 47.53719, 
+	
 	lonMin: 19.01110, 
 	
-	pointsLat: 35, // 35
-	pointsLon: 40, // 40
+	pointsLat: 25,
+	pointsLon: 25,
 	
-	diffLat: 0.002973,
-	diffLon: 0.003255,
+	diffLat: 0.0041622,
+	diffLon: 0.005208,
+	
+	title: "Transit time visualization",
 	
 	getBounds: function() {
 		return new google.maps.LatLngBounds(
@@ -42,7 +100,16 @@ var settings = {
 			}
 		}
 		return this.colors[index];
+	},
+	
+	setResolution : function(pointsLatNew, pointsLonNew) {
+		this.diffLat = this.pointsLat / pointsLatNew * this.diffLat;
+		this.diffLon = this.pointsLon / pointsLonNew * this.diffLon;
+		this.pointsLat = pointsLatNew;
+		this.pointsLon = pointsLonNew;
 	}
+	
+	
 };
 
 
@@ -76,8 +143,12 @@ function applyPhase(phase) {
 	frame.setEditable(phase.frameEditable);
 	marker.setMap(phase.markerVisible ? GOOGLE.map : null);
 	text.innerHTML = phase.message;
-	file.disabled = !phase.fileEnabled;
-	button.disabled = !phase.nextEnabled;
+	if (file && !phase.fileEnabled) {
+		file.parentNode.removeChild(file);
+	}
+	if (button && !phase.nextEnabled) {
+		button.parentNode.removeChild(button);
+	}
 	if (phase.buttonText) {
 		button.value = phase.buttonText;
 	}
@@ -113,16 +184,55 @@ var workPhase = {
 	}
 };
 
+var fineTunePhase = {
+	frameVisible: true,
+	frameEditable: false,
+	markerVisible: false,
+	
+	message: 'Please select further settings',
+	fileEnabled: false,
+	nextEnabled: true,
+	buttonText: "Start",
+	next: workPhase,
+	init: function() {
+		var titleField = document.createElement("input");
+		titleField.setAttribute('type', 'text');
+		titleField.setAttribute('id', 'title');
+		var text = document.getElementById('text');
+		text.appendChild(document.createElement('br'));
+		text.appendChild(document.createTextNode("Coloring by:"));
+		text.appendChild(createCombo('coloring', timeOptions));
+		text.appendChild(document.createTextNode("Resolution:"));
+		text.appendChild(createCombo('resolution', resolutionOptions));
+		text.appendChild(document.createElement('br'));
+		text.appendChild(document.createTextNode("Travel mode:"));
+		text.appendChild(createCombo('travel_mode', travelOptions));
+		text.appendChild(document.createTextNode("Title:"));
+		text.appendChild(titleField);
+		
+	},
+	cleanUp: function() {
+		var titleField = document.getElementById('title');
+		document.title = titleField.value;
+		settings.title = titleField.value;
+		var text = document.getElementById("text");
+		var nodes = text.childNodes;
+		for (var i = 0; i < nodes.length; ++i) {
+			text.removeChild(nodes[i]);
+		}
+	}
+};
+
 var areaPhase = {
 	frameVisible: true,
 	frameEditable: true,
 	markerVisible: false,
 	
-	message: 'Please select destination area',// and enter resolution <input id="resolution" type="text" value="35,40" onchange="resolutionChange()"/>',
+	message: 'Please select destination area',
 	fileEnabled: false,
 	nextEnabled: true,
 	buttonText: "Next",
-	next: workPhase,
+	next: fineTunePhase,
 	init: function() {
 		google.maps.event.addListener(frame, 'bounds_changed', function() {
 			settings.latMax = frame.getBounds().getNorthEast().lat();
@@ -209,6 +319,7 @@ function createPhaseFromContent(contents) {
 		fileEnabled: false,
 		nextEnabled: false,
 		init: function() {
+			document.title = settings.title;
 			frame.setBounds(settings.getBounds());
 			var calc = new Calculations(settings, onEnd, onAdd);
 			calc.setState(savedObject.state);
